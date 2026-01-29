@@ -59,25 +59,40 @@ function transformList(list: SdkList): List {
 export async function getAllBookmarks(): Promise<Bookmark[]> {
   try {
     const path = "/bookmarks" as any;
-    const result = await client.GET(path, { params: {} });
-    const { data, error } = result;
-    if (error) throw error;
+    let allBookmarks: SdkBookmark[] = [];
+    let cursor: string | undefined = undefined;
 
-    let sdkBookmarks: SdkBookmark[] = [];
-    if (Array.isArray(data)) {
-      sdkBookmarks = data as SdkBookmark[];
-    } else if (data && "bookmarks" in data && Array.isArray(data.bookmarks)) {
-      sdkBookmarks = data.bookmarks as SdkBookmark[];
-    } else if (data) {
-      sdkBookmarks = [data as SdkBookmark];
-    }
+    // Fetch all pages using cursor pagination
+    do {
+      const result: any = await client.GET(path, {
+        params: {
+          query: {
+            cursor,
+            limit: 100,
+            ...(config.ONLY_UNARCHIVED ? { archived: false } : {}),
+          },
+        },
+      });
+      const { data, error }: { data: any; error: any } = result;
+      if (error) throw error;
 
-    // Filter out archived bookmarks if ONLY_UNARCHIVED is enabled
-    if (config.ONLY_UNARCHIVED) {
-      sdkBookmarks = sdkBookmarks.filter((bookmark) => !bookmark.archived);
-    }
+      let sdkBookmarks: SdkBookmark[] = [];
+      if (Array.isArray(data)) {
+        sdkBookmarks = data as SdkBookmark[];
+        cursor = undefined;
+      } else if (data && "bookmarks" in data && Array.isArray(data.bookmarks)) {
+        sdkBookmarks = data.bookmarks as SdkBookmark[];
+        cursor = data.nextCursor ?? undefined;
+      } else if (data) {
+        sdkBookmarks = [data as SdkBookmark];
+        cursor = undefined;
+      }
 
-    return sdkBookmarks.map(transformBookmark);
+      allBookmarks = allBookmarks.concat(sdkBookmarks);
+    } while (cursor);
+
+    console.log(`Fetched ${allBookmarks.length} total bookmarks`);
+    return allBookmarks.map(transformBookmark);
   } catch (error) {
     console.error("Error fetching bookmarks:", error);
     throw error;
@@ -130,28 +145,45 @@ export async function getList(listId: string): Promise<List> {
 // Get bookmarks in a specific list
 export async function getBookmarksInList(listId: string): Promise<Bookmark[]> {
   try {
-    // Use type assertion to bypass TypeScript path checking
     const path = `/lists/${listId}/bookmarks` as any;
-    const result = await client.GET(path, { params: {} });
-    const { data, error } = result;
-    if (error) throw error;
+    let allBookmarks: SdkBookmark[] = [];
+    let cursor: string | undefined = undefined;
 
-    // The API returns bookmarks directly or in a bookmarks array
-    let sdkBookmarks: SdkBookmark[] = [];
-    if (Array.isArray(data)) {
-      sdkBookmarks = data as SdkBookmark[];
-    } else if (data && "bookmarks" in data && Array.isArray(data.bookmarks)) {
-      sdkBookmarks = data.bookmarks as SdkBookmark[];
-    } else if (data) {
-      sdkBookmarks = [data as SdkBookmark];
-    }
+    // Fetch all pages using cursor pagination
+    do {
+      const result: any = await client.GET(path, {
+        params: {
+          query: {
+            cursor,
+            limit: 100,
+          },
+        },
+      });
+      const { data, error }: { data: any; error: any } = result;
+      if (error) throw error;
+
+      let sdkBookmarks: SdkBookmark[] = [];
+      if (Array.isArray(data)) {
+        sdkBookmarks = data as SdkBookmark[];
+        cursor = undefined;
+      } else if (data && "bookmarks" in data && Array.isArray(data.bookmarks)) {
+        sdkBookmarks = data.bookmarks as SdkBookmark[];
+        cursor = data.nextCursor ?? undefined;
+      } else if (data) {
+        sdkBookmarks = [data as SdkBookmark];
+        cursor = undefined;
+      }
+
+      allBookmarks = allBookmarks.concat(sdkBookmarks);
+    } while (cursor);
 
     // Filter out archived bookmarks if ONLY_UNARCHIVED is enabled
     if (config.ONLY_UNARCHIVED) {
-      sdkBookmarks = sdkBookmarks.filter((bookmark) => !bookmark.archived);
+      allBookmarks = allBookmarks.filter((bookmark) => !bookmark.archived);
     }
 
-    return sdkBookmarks.map(transformBookmark);
+    console.log(`Fetched ${allBookmarks.length} bookmarks from list ${listId}`);
+    return allBookmarks.map(transformBookmark);
   } catch (error) {
     console.error("Error fetching bookmarks in list:", error);
     throw error;

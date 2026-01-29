@@ -1,8 +1,30 @@
 import { Feed } from 'feed'
 import type { Bookmark } from '../api/types'
 
+// Cache for RSS feed - stores bookmarks selected at scheduled time
+interface RSSCache {
+  bookmarks: Bookmark[]
+  generatedAt: Date
+}
+
+let rssCache: RSSCache | null = null
+
+// Update the RSS cache with new bookmarks (called by scheduler)
+export function updateRSSCache(bookmarks: Bookmark[]): void {
+  rssCache = {
+    bookmarks,
+    generatedAt: new Date()
+  }
+  console.log(`RSS cache updated with ${bookmarks.length} bookmarks at ${rssCache.generatedAt.toISOString()}`)
+}
+
+// Get cached bookmarks for RSS feed
+export function getCachedBookmarks(): RSSCache | null {
+  return rssCache
+}
+
 // Format bookmarks into RSS feed
-export function formatBookmarksRSS(bookmarks: Bookmark[]): string {
+export function formatBookmarksRSS(bookmarks: Bookmark[], generatedAt?: Date): string {
   const feed = new Feed({
     title: "Hoarder Random RSS",
     description: "Your random bookmarks from Hoarder",
@@ -43,7 +65,7 @@ export function formatBookmarksRSS(bookmarks: Bookmark[]): string {
         id: bookmark.id,
         link: url,
         description: description,
-        date: new Date(bookmark.created_at)
+        date: generatedAt || new Date(bookmark.created_at)
       })
     })
   }

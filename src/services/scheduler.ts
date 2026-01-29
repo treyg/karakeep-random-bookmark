@@ -5,7 +5,7 @@ import { sendBookmarksEmail } from './email'
 import { sendBookmarksDiscord } from './discord'
 import { sendBookmarksMattermost } from './mattermost'
 import { sendBookmarksTelegram } from './telegram'
-import { generateBookmarksRSS } from './rss'
+import { updateRSSCache } from './rss'
 
 // Function to convert time string (HH:MM) to cron time format (MM HH)
 function timeToCron(timeString: string): { minute: string; hour: string } {
@@ -86,10 +86,10 @@ async function sendNotification() {
       console.log('Sending bookmarks via Telegram...')
       await sendBookmarksTelegram(bookmarks)
     } else if (config.NOTIFICATION_METHOD === 'rss') {
-      console.log('Updating RSS feed with new bookmarks...')
-      await generateBookmarksRSS(bookmarks)
+      console.log('Updating RSS feed cache with new bookmarks...')
+      updateRSSCache(bookmarks)
       console.log(
-        'RSS feed updated successfully - available at http://localhost:8080/rss/feed'
+        'RSS feed cache updated successfully - available at http://localhost:8080/rss/feed'
       )
     }
 

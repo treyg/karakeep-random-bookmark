@@ -4,7 +4,7 @@ import { startScheduler, sendImmediate } from './services/scheduler'
 import { initDiscordClient, sendBookmarksDiscord } from './services/discord'
 import { sendBookmarksTelegram } from './services/telegram'
 import { getRandomBookmarks } from './api/hoarder'
-import { generateBookmarksRSS } from './services/rss'
+import { getCachedBookmarks, formatBookmarksRSS, updateRSSCache } from './services/rss'
 
 const app = new Hono()
 
@@ -85,14 +85,29 @@ app.get('/test-email', async c => {
 // RSS feed endpoint
 app.get('/rss/feed', async c => {
   try {
-    // Get random bookmarks based on configuration
-    const bookmarks = await getRandomBookmarks(
-      config.BOOKMARKS_COUNT,
-      config.SPECIFIC_LIST_ID
-    )
+    const cache = getCachedBookmarks()
+    
+    let bookmarks: Awaited<ReturnType<typeof getRandomBookmarks>>
+    let generatedAt: Date
+    
+    if (cache) {
+      // Serve from cache (populated by scheduler)
+      bookmarks = cache.bookmarks
+      generatedAt = cache.generatedAt
+    } else {
+      // No cache yet (first request before scheduler runs) - generate initial feed
+      console.log('No RSS cache found, generating initial feed...')
+      bookmarks = await getRandomBookmarks(
+        config.BOOKMARKS_COUNT,
+        config.SPECIFIC_LIST_ID
+      )
+      generatedAt = new Date()
+      // Store in cache so subsequent requests get the same bookmarks
+      updateRSSCache(bookmarks)
+    }
 
-    // Generate RSS feed
-    const rssContent = await generateBookmarksRSS(bookmarks)
+    // Generate RSS feed from cached bookmarks
+    const rssContent = formatBookmarksRSS(bookmarks, generatedAt)
 
     // Set content type to XML
     c.header('Content-Type', 'application/rss+xml')
